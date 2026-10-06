@@ -1,0 +1,1112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Portal Shadow Wallpaper</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&family=Sono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --teal-deep: #102930;
+    --teal: #034752;
+    --light-blue: #3FBCCE;
+    --off-white: #FDFDFC;
+    --text-2: rgba(253, 253, 252, 0.68);
+    --panel: rgba(16, 41, 48, 0.88);
+    --line: rgba(253, 253, 252, 0.14);
+    --sans: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Sono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; background: var(--teal-deep); overflow: hidden; }
+  body { font-family: var(--sans); color: var(--off-white); }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  .identity, .clock, .hint { position: fixed; pointer-events: none; text-shadow: 0 1px 12px rgba(16, 41, 48, 0.55); }
+  .identity { left: clamp(16px, 3.2vw, 64px); bottom: clamp(16px, 3.6vw, 64px); display: grid; gap: 4px; }
+  .identity .name { font-size: clamp(20px, 2.2vw, 44px); font-weight: 600; letter-spacing: -0.01em; }
+  .identity .state { font-size: clamp(13px, 1vw, 20px); color: var(--text-2); font-weight: 500; }
+  .clock { right: clamp(16px, 3.2vw, 64px); bottom: clamp(16px, 3.6vw, 64px); text-align: right; display: grid; gap: 4px; }
+  .clock .time { font-family: var(--mono); font-size: clamp(22px, 2.4vw, 48px); font-variant-numeric: tabular-nums; }
+  .clock .date { font-size: clamp(13px, 1vw, 20px); color: var(--text-2); font-weight: 500; }
+  .hint {
+    left: 50%; top: 14%; transform: translateX(-50%);
+    font-size: clamp(14px, 1.2vw, 24px); font-weight: 500; letter-spacing: 0.02em; color: var(--text-2);
+    transition: opacity 1.2s ease; white-space: nowrap;
+  }
+
+  .settings-btn {
+    position: fixed; top: calc(env(safe-area-inset-top, 0px) + 16px); right: 16px;
+    font: 500 13px var(--sans); color: var(--off-white); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; cursor: pointer;
+    transition: opacity .4s ease;
+  }
+  .settings-btn:focus-visible, .panel button:focus-visible, .panel input:focus-visible { outline: 2px solid var(--light-blue); outline-offset: 2px; }
+  .panel {
+    position: fixed; top: calc(env(safe-area-inset-top, 0px) + 60px); right: 16px; width: min(300px, calc(100vw - 32px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+    display: grid; gap: 14px; font-size: 13px; backdrop-filter: blur(8px);
+  }
+  .panel h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: rgba(0,0,0,.25); border-radius: 10px; padding: 3px; }
+  .seg button { font: 500 13px var(--sans); color: var(--text-2); background: transparent; border: 0; border-radius: 8px; padding: 7px 0; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--light-blue); color: var(--teal-deep); }
+  .row { display: grid; gap: 6px; }
+  .row label { display: flex; justify-content: space-between; color: var(--off-white); }
+  .row label output { font-family: var(--mono); color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .row input[type="range"] { width: 100%; accent-color: var(--light-blue); }
+  .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .check input { accent-color: var(--light-blue); width: 16px; height: 16px; }
+  .status { font-size: 12px; line-height: 1.45; color: var(--text-2); border-top: 1px solid var(--line); padding-top: 12px; }
+  .status b { color: var(--off-white); font-weight: 600; }
+  .preview { width: 100%; aspect-ratio: 16 / 9; max-width: 100%; border-radius: 8px; background: #000; display: block; }
+
+  .feed-label {
+    position: fixed; left: 0; top: 0; pointer-events: none; opacity: 0; white-space: nowrap;
+    font-size: clamp(11px, 0.8vw, 16px); font-weight: 500; letter-spacing: 0.02em; color: var(--off-white);
+    background: rgba(16, 41, 48, 0.72); border-radius: 999px; padding: 5px 12px;
+    transform: translate(-50%, 0);
+  }
+  .panel-btn { font: 500 13px var(--sans); color: var(--off-white); background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 10px; padding: 9px 0; cursor: pointer; }
+  .panel-btn:hover { border-color: var(--light-blue); }
+  .panel-btn:focus-visible { outline: 2px solid var(--light-blue); outline-offset: 2px; }
+
+  /* Fine film grain over the render, so flat gradients read as light rather than as a 3D test scene */
+  .grain { position: fixed; inset: -50%; z-index: 1; pointer-events: none; opacity: 0.07; mix-blend-mode: overlay; animation: grain 0.5s steps(4) infinite; }
+  @keyframes grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-3%, 2%); } 50% { transform: translate(2%, -3%); } 75% { transform: translate(-2%, -1%); } }
+  .identity, .clock, .hint, .feed-label, .settings-btn, .panel { z-index: 2; }
+
+  @media (prefers-reduced-motion: reduce) { .hint, .settings-btn { transition: none; } .grain { animation: none; } }
+</style>
+
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<canvas id="scene" aria-label="Interactive wallpaper: your shadow is projected into a 3D room"></canvas>
+
+<div class="hint" id="hint">Step in front of the portal</div>
+<div class="feed-label" id="feedLabel">Only on this screen · not recorded</div>
+<div class="identity"><span class="name">San Francisco</span><span class="state">Available</span></div>
+<div class="clock"><span class="time" id="time">09:54</span><span class="date" id="date">Tue 6 Oct</span></div>
+
+<button class="settings-btn" id="settingsBtn" aria-expanded="false" aria-controls="panel">Settings</button>
+<div class="panel" id="panel" hidden>
+  <h2>Shadow source</h2>
+  <div class="seg" role="group" aria-label="Shadow source">
+    <button id="srcCamera" aria-pressed="false">Camera</button>
+    <button id="srcDemo" aria-pressed="true">Demo figure</button>
+  </div>
+  <canvas class="preview" id="preview" width="256" height="144" aria-label="Person mask preview"></canvas>
+  <div class="row">
+    <label for="size">Shadow size <output id="sizeOut">1.00</output></label>
+    <input type="range" id="size" min="0.5" max="1.6" step="0.01" value="0.5">
+  </div>
+  <div class="row">
+    <label for="soft">Softness <output id="softOut">6</output></label>
+    <input type="range" id="soft" min="0" max="24" step="1" value="12">
+  </div>
+  <div class="row">
+    <label for="lightY">Light height <output id="lightYOut">2.2 m</output></label>
+    <input type="range" id="lightY" min="1.8" max="5" step="0.1" value="1.8">
+  </div>
+  <div class="row">
+    <label for="depth">Depth effect <output id="depthOut">30%</output></label>
+    <input type="range" id="depth" min="0" max="1" step="0.05" value="0.3">
+  </div>
+  <div class="row">
+    <label for="tilt">View tilt <output id="tiltOut">3°</output></label>
+    <input type="range" id="tilt" min="0" max="10" step="0.5" value="3">
+  </div>
+  <button class="panel-btn" id="previewBtn">Show camera preview</button>
+  <label class="check"><input type="checkbox" id="mirror" checked> Mirror shadow</label>
+  <label class="check"><input type="checkbox" id="parallax" checked> Room follows the person</label>
+  <label class="check"><input type="checkbox" id="dust" checked> Dust in the light</label>
+  <div class="status" id="status">Demo figure running. Move the pointer to steer it.</div>
+</div>
+
+<video id="video" playsinline muted hidden></video>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.158.0/three.min.js"></script>
+<script>
+(() => {
+  const SEG_W = 512, SEG_H = 288;       // person mask resolution (16:9 camera frame)
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- Settings ----------
+  const S = { size: 0.5, soft: 12, lightY: 1.8, tilt: 3, depth: 0.3, mirror: true, parallax: true, dust: true, source: 'demo' };
+  const $ = id => document.getElementById(id);
+  const bindRange = (id, key, fmt) => {
+    const el = $(id), out = $(id + 'Out');
+    const set = () => { S[key] = parseFloat(el.value); out.textContent = fmt(S[key]); };
+    el.addEventListener('input', set); set();
+  };
+  bindRange('size', 'size', v => v.toFixed(2));
+  bindRange('soft', 'soft', v => String(v));
+  bindRange('lightY', 'lightY', v => v.toFixed(1) + ' m');
+  bindRange('depth', 'depth', v => Math.round(v * 100) + '%');
+  bindRange('tilt', 'tilt', v => (v % 1 ? v.toFixed(1) : v) + '°');
+  ['mirror', 'parallax', 'dust'].forEach(k => {
+    const el = $(k); const set = () => { S[k] = el.checked; }; el.addEventListener('change', set); set();
+  });
+  const panel = $('panel'), settingsBtn = $('settingsBtn');
+  settingsBtn.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    settingsBtn.setAttribute('aria-expanded', String(!panel.hidden));
+  });
+  const status = msg => { $('status').innerHTML = msg; };
+
+  // Film grain tile
+  {
+    const g = document.createElement('canvas'); g.width = g.height = 160;
+    const gc = g.getContext('2d'), img = gc.createImageData(160, 160);
+    for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+    gc.putImageData(img, 0, 0);
+    document.querySelector('.grain').style.backgroundImage = `url(${g.toDataURL()})`;
+  }
+
+  // ---------- Renderer & room ----------
+  const canvas = $('scene');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;   // true depth test: dark core, even penumbra (VSM left a grey halo)
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.9;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#2b241f');
+  scene.fog = new THREE.Fog('#cbb9a4', 14, 46);      // warm haze: the back of the room sits slightly further away
+
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 60);
+  const camBase = new THREE.Vector3(0, 2.3, 7.2);   // resting eye position: a little above eye level
+  camera.position.copy(camBase);
+  const BACK_Z = -9;                                 // back wall: deep room, ~16 m from the viewer
+
+  // The screen is a fixed window into the room: a rectangle at WIN_Z. The view is an off-axis projection
+  // from the eye through that rectangle, so moving your head looks *through* the window from a new angle
+  // instead of swinging the camera around. The window sits a little low, so the resting view looks down
+  // onto the floor where the shadow lands.
+  const WIN_Z = 1.5;
+  const win = { w: 1, h: 1 };
+  const UNITS_PER_M = (camBase.z - WIN_Z) / 0.6;     // world units per real metre: resting head 60 cm from the screen
+  function applyWindowProjection() {
+    // View tilt: the window centre sits below the resting eye by the chosen downward angle
+    const WIN_Y = camBase.y - (camBase.z - WIN_Z) * Math.tan(S.tilt * Math.PI / 180);
+    const e = camera.position, d = Math.max(0.5, e.z - WIN_Z), n = camera.near / d;
+    camera.projectionMatrix.makePerspective(
+      (-win.w / 2 - e.x) * n, (win.w / 2 - e.x) * n,
+      (WIN_Y + win.h / 2 - e.y) * n, (WIN_Y - win.h / 2 - e.y) * n,
+      camera.near, camera.far);
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+  }
+
+  // ---------- Materials: a late-afternoon gallery ----------
+  // Warm limewash plaster, pale terrazzo with brand-coloured chips, travertine, oak and one glazed pot.
+  // Under the warm light the shadows fall teal (the ambient light is cool), so the brand comes in through the light.
+  const canvasTex = (size, draw, repeatX = 1, repeatY = 1, srgb = true) => {
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    draw(c.getContext('2d'), size);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeatX, repeatY);
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  const rand = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();   // seeded: same room every load
+  // Soft cloudy blotches, for limewash walls and stone
+  const blotches = (ctx, n, size, alpha, streak = 1) => {
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, size, size);
+    ctx.filter = `blur(${size / 40}px)`;
+    for (let i = 0; i < n; i++) {
+      const dark = rand() < 0.55;
+      ctx.fillStyle = dark ? `rgba(90,70,50,${alpha * rand()})` : `rgba(255,255,255,${alpha * 1.5 * rand()})`;
+      const x = rand() * size, y = rand() * size, r = size * (0.02 + rand() * 0.08);
+      for (const dx of [-size, 0, size]) for (const dy of [-size, 0, size]) {   // draw wrapped copies so the tile repeats seamlessly
+        ctx.beginPath(); ctx.ellipse(x + dx, y + dy, r * streak, r, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.filter = 'none';
+  };
+  const plasterTex = canvasTex(512, (c, s) => blotches(c, 260, s, 0.07), 3, 1.5);
+  const stoneTex = canvasTex(512, (c, s) => {
+    blotches(c, 200, s, 0.08, 4);                      // travertine: long horizontal veins
+    for (let i = 0; i < 90; i++) { c.fillStyle = `rgba(110,85,60,${0.15 + rand() * 0.2})`; c.fillRect(rand() * s, rand() * s, 2 + rand() * 14, 1 + rand() * 1.5); }
+  }, 1, 1);
+  const terrazzoTex = canvasTex(1024, (c, s) => {
+    c.fillStyle = '#dcd2c5'; c.fillRect(0, 0, s, s);
+    const chips = ['#c4b6a4', '#efe8de', '#a39380', '#8c7b69', '#034752', '#3FBCCE', '#F07144', '#73E0AA'];
+    const weight = [30, 30, 18, 10, 5, 2.5, 2, 2.5];
+    const total = weight.reduce((a, b) => a + b);
+    for (let i = 0; i < 9000; i++) {
+      let r = rand() * total, k = 0; while ((r -= weight[k]) > 0) k++;
+      c.fillStyle = chips[k];
+      const x = rand() * s, y = rand() * s, sz = 1.2 + rand() * rand() * 7;
+      c.beginPath();
+      for (let p = 0; p < 5; p++) { const a = p / 5 * Math.PI * 2 + rand() * 0.8, rr = sz * (0.6 + rand() * 0.6); c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+      c.fill();
+    }
+  }, 5, 7);
+  const oakTex = canvasTex(512, (c, s) => {
+    c.fillStyle = '#b58a62'; c.fillRect(0, 0, s, s);
+    for (let i = 0; i < 160; i++) {
+      c.strokeStyle = `rgba(${rand() < 0.5 ? '90,60,35' : '215,180,140'},${0.08 + rand() * 0.15})`;
+      c.lineWidth = 1 + rand() * 3; c.beginPath();
+      const y = rand() * s; c.moveTo(0, y);
+      for (let x = 0; x <= s; x += 32) c.lineTo(x, y + Math.sin(x / 70 + i) * 4);
+      c.stroke();
+    }
+  }, 1, 1);
+
+  const mat = (hex, rough = 0.92, map = null, extra = {}) => new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: 0, map, ...extra });
+  const wallMat = mat('#efe3d3', 0.95, plasterTex, { bumpMap: plasterTex, bumpScale: 0.6 });
+  const floorMat = mat('#fffaf2', 0.55, terrazzoTex);
+  const stoneMat = mat('#e8dccb', 0.85, stoneTex, { bumpMap: stoneTex, bumpScale: 0.4 });
+  const oakMat = mat('#ffffff', 0.6, oakTex);
+  const glazeMat = mat('#034752', 0.28);
+  const leafMat = mat('#55704c', 0.7, null, { side: THREE.DoubleSide });
+  const accentMat = new THREE.MeshPhysicalMaterial({ color: '#3FBCCE', roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.15 });
+  const add = (geo, m, x, y, z, ry = 0) => {
+    const mesh = new THREE.Mesh(geo, m);
+    mesh.position.set(x, y, z); mesh.rotation.y = ry;
+    mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); return mesh;
+  };
+  // Box with softly rounded edges (bevelled extrusion), centred like BoxGeometry
+  function roundedBox(w, h, d, r = 0.04) {
+    r = Math.min(r, w / 2 - 1e-3, h / 2 - 1e-3, d / 2 - 1e-3);
+    const sw = w / 2 - r, sh = h / 2 - r, shape = new THREE.Shape();
+    shape.moveTo(-sw, -sh); shape.lineTo(sw, -sh); shape.lineTo(sw, sh); shape.lineTo(-sw, sh); shape.closePath();
+    const g = new THREE.ExtrudeGeometry(shape, { depth: d - 2 * r, bevelEnabled: true, bevelSize: r, bevelThickness: r, bevelSegments: 4, curveSegments: 4 });
+    g.translate(0, 0, -(d - 2 * r) / 2);
+    g.computeVertexNormals();
+    // Planar UVs from position so stone textures don't stretch over the bevels
+    const p = g.attributes.position, uv = g.attributes.uv;
+    for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) + p.getZ(i)) * 0.6, p.getY(i) * 0.6);
+    return g;
+  }
+  // Soft contact shadow on the floor under an object (stands in for ambient occlusion)
+  const contactTex = canvasTex(128, (c, s) => {
+    const g = c.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    g.addColorStop(0, 'rgba(40,28,20,0.75)'); g.addColorStop(0.5, 'rgba(40,28,20,0.3)'); g.addColorStop(1, 'rgba(40,28,20,0)');
+    c.fillStyle = g; c.fillRect(0, 0, s, s);
+  });
+  const contactMat = new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false, opacity: 0.55 });
+  function contact(x, z, w, d, ry = 0) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), contactMat);
+    m.rotation.set(-Math.PI / 2, 0, ry); m.position.set(x, 0.004, z); scene.add(m); return m;
+  }
+
+  // Room shell: back wall, floor, side walls, ceiling. Built from unit planes so layoutRoom() can resize
+  // it: the back wall always has the display's aspect ratio (see resize()).
+  const FRONT_Z = 11, D = FRONT_Z - BACK_Z, MID_Z = (FRONT_Z + BACK_Z) / 2;
+  const room = { W: 14, H: 6 };
+  const unit = () => new THREE.PlaneGeometry(1, 1);
+  const backWall = add(unit(), wallMat, 0, 0, BACK_Z); backWall.castShadow = false;
+  const floor = add(unit(), floorMat, 0, 0, MID_Z); floor.rotation.x = -Math.PI / 2; floor.castShadow = false;
+  const lw = add(unit(), wallMat, 0, 0, MID_Z, Math.PI / 2); lw.castShadow = false;
+  const rw = add(unit(), wallMat, 0, 0, MID_Z, -Math.PI / 2); rw.castShadow = false;
+  const ceil = add(unit(), wallMat, 0, 0, MID_Z); ceil.rotation.x = Math.PI / 2; ceil.castShadow = false;
+  // Coved join between floor and back wall, like a gallery plinth: a quarter-round plaster sweep, 1 unit long in x
+  let cove;
+  {
+    const R = 0.9, g = new THREE.PlaneGeometry(1, R * Math.PI / 2, 1, 16), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const a = (p.getY(i) / (R * Math.PI / 2) + 0.5) * Math.PI / 2;   // 0 at the floor, 90° at the wall
+      p.setXYZ(i, p.getX(i), R - R * Math.cos(a), BACK_Z + R - R * Math.sin(a));
+    }
+    g.computeVertexNormals();
+    cove = add(g, new THREE.MeshStandardMaterial({ color: '#efe3d3', roughness: 0.95, map: plasterTex, side: THREE.DoubleSide }), 0, 0, 0);
+    cove.castShadow = false;
+  }
+  // Skirting shadow line where the side walls meet the floor
+  const skirtL = contact(0, MID_Z, 0.6, D), skirtR = contact(0, MID_Z, 0.6, D);
+  function layoutRoom(W, H) {
+    room.W = W; room.H = H;
+    backWall.scale.set(W, H, 1); backWall.position.y = H / 2;
+    floor.scale.set(W, D, 1);
+    ceil.scale.set(W, D, 1); ceil.position.y = H;
+    lw.scale.set(D, H, 1); lw.position.set(-W / 2, H / 2, MID_Z);
+    rw.scale.set(D, H, 1); rw.position.set(W / 2, H / 2, MID_Z);
+    cove.scale.x = W;
+    skirtL.position.x = -W / 2 + 0.15; skirtR.position.x = W / 2 - 0.15;
+    // Furniture keeps its size down to an 11.5 m wide room, then shrinks with it (narrow and portrait displays)
+    props.scale.setScalar(Math.min(1, W / 11.5));
+    sun.target.position.x = 4.6 * Math.min(1, W / 11.5);
+  }
+  const propStart = scene.children.length;   // everything added from here to the lights is furniture
+
+  // Objects: an arch, a plinth with a sphere, a bench, a column — staggered in depth so the
+  // shadow crosses them at different distances instead of everything hugging the back wall
+  // The arch is a small portal: its opening has the standard LED wall's aspect ratio (2400 x 1620),
+  // so the camera preview shown inside it is framed exactly like the far side sees you.
+  const LED_ASPECT = 2400 / 1620;
+  const archX = -2.6, archZ = -1.6;              // free-standing doorway, set back into the room
+  const OPEN_H = 2.0, OPEN_W = OPEN_H * LED_ASPECT, FRAME_T = 0.26, FRAME_D = 0.42, OPEN_Y = 0;     // no sill: a doorway down to the floor
+  add(roundedBox(OPEN_W + FRAME_T * 2, FRAME_T, FRAME_D, 0.05), stoneMat, archX, OPEN_Y + OPEN_H + FRAME_T / 2, archZ);       // lintel
+  add(roundedBox(FRAME_T, OPEN_H, FRAME_D, 0.05), stoneMat, archX - OPEN_W / 2 - FRAME_T / 2, OPEN_Y + OPEN_H / 2, archZ);   // left jamb
+  add(roundedBox(FRAME_T, OPEN_H, FRAME_D, 0.05), stoneMat, archX + OPEN_W / 2 + FRAME_T / 2, OPEN_Y + OPEN_H / 2, archZ);   // right jamb
+  contact(archX - OPEN_W / 2 - FRAME_T / 2, archZ, 0.9, 1.0); contact(archX + OPEN_W / 2 + FRAME_T / 2, archZ, 0.9, 1.0);
+
+  // Travertine plinth with the glazed ball, and a smaller stacked sculpture beside it
+  add(roundedBox(0.9, 1.0, 0.9, 0.06), stoneMat, 2.7, 0.5, -0.1);
+  const sphere = add(new THREE.SphereGeometry(0.42, 64, 48), accentMat, 2.7, 1.42, -0.1);
+  contact(2.7, -0.1, 1.9, 1.9);
+  add(roundedBox(0.7, 0.36, 0.5, 0.1), stoneMat, 3.85, 0.18, 0.5, 0.4);
+  add(new THREE.SphereGeometry(0.2, 40, 24), mat('#c96f4a', 0.5), 3.85, 0.56, 0.5);   // terracotta: a muted take on the brand orange
+  contact(3.85, 0.5, 1.2, 1.0, 0.4);
+
+  // Oak bench on two travertine blocks
+  add(roundedBox(2.6, 0.09, 0.62, 0.035), oakMat, 0.3, 0.44, 0.4, 0.12);
+  add(roundedBox(0.36, 0.4, 0.5, 0.04), stoneMat, 0.3 - 1.0 * Math.cos(0.12), 0.2, 0.4 + 1.0 * Math.sin(0.12), 0.12);
+  add(roundedBox(0.36, 0.4, 0.5, 0.04), stoneMat, 0.3 + 1.0 * Math.cos(0.12), 0.2, 0.4 - 1.0 * Math.sin(0.12), 0.12);
+  contact(0.3, 0.4, 3.4, 1.2, 0.12);
+
+  // Column further back: a depth cue
+  add(new THREE.CylinderGeometry(0.24, 0.26, 4.6, 48), stoneMat, 4.2, 2.3, -4.5);
+  contact(4.2, -4.5, 1.2, 1.2);
+
+  // Glazed teal pot with a leafy plant, front left
+  const plant = new THREE.Group(); plant.position.set(-5.4, 0, -3.2); scene.add(plant);
+  {
+    const prof = [[0, 0], [0.22, 0], [0.3, 0.08], [0.34, 0.3], [0.31, 0.52], [0.27, 0.6], [0.29, 0.64], [0.25, 0.64]].map(([x, y]) => new THREE.Vector2(x, y));
+    const pot = new THREE.Mesh(new THREE.LatheGeometry(prof, 48), glazeMat);
+    pot.castShadow = pot.receiveShadow = true; plant.add(pot);
+    const leafGeo = new THREE.SphereGeometry(1, 12, 8); leafGeo.scale(0.07, 0.012, 0.22); leafGeo.translate(0, 0, 0.22);
+    for (let i = 0; i < 26; i++) {
+      const stem = new THREE.Group();
+      stem.position.y = 0.6;
+      stem.rotation.set(-0.3 - rand() * 0.9, rand() * Math.PI * 2, 0, 'YXZ');
+      const len = 0.4 + rand() * 0.7;
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.008, len, 5), leafMat);
+      stalk.rotation.x = Math.PI / 2; stalk.position.z = len / 2; stalk.castShadow = true; stem.add(stalk);
+      const leaf = new THREE.Mesh(leafGeo, leafMat);
+      leaf.position.z = len; leaf.rotation.x = 0.4 + rand() * 0.5; leaf.castShadow = leaf.receiveShadow = true; stem.add(leaf);
+      stem.userData.phase = rand() * 10;
+      plant.add(stem);
+    }
+    contact(-5.4, -3.2, 1.1, 1.1);
+  }
+
+  // Lights: teal ambient fills the shadow, a spotlight behind the person casts it into the room
+  // Gather the furniture into one group so the room can scale it for narrow displays
+  const props = new THREE.Group(); scene.add(props);
+  scene.children.slice(propStart).filter(o => o !== props).forEach(o => props.attach(o));
+
+  // Cool sky fill: whatever the warm lights don't reach falls teal, which is the colour of the shadows
+  const hemi = new THREE.HemisphereLight('#8cc3c8', '#8a7360', 0.85);
+  scene.add(hemi);
+
+  // Late sun through a tall window off to the left, with a tree outside it. The window and leaves are a
+  // light cookie (an animated canvas), aimed at the right of the room so the person's shadow, mostly
+  // centre-left, stays dark. Its own shadows rake long across the floor from the objects.
+  const GOBO = 512;
+  const gobo = document.createElement('canvas'); gobo.width = gobo.height = GOBO;
+  const gctxSun = gobo.getContext('2d');
+  const goboTex = new THREE.CanvasTexture(gobo); goboTex.colorSpace = THREE.SRGBColorSpace;
+  const leaves = [];
+  for (let i = 0; i < 70; i++) {
+    // Clustered along two branches entering from the top-left of the window
+    const b = rand() < 0.6 ? 0 : 1, t = rand();
+    leaves.push({
+      x: b ? 40 + t * 260 : 20 + t * 200, y: b ? 20 + t * 120 + rand() * 50 : 70 + t * 230 + rand() * 40,
+      rx: 10 + rand() * 18, ry: 5 + rand() * 9, rot: rand() * Math.PI, phase: rand() * 10, amp: 2 + rand() * 5
+    });
+  }
+  function drawGobo(t) {
+    const c = gctxSun, s = GOBO;
+    c.fillStyle = '#000'; c.fillRect(0, 0, s, s);
+    // Window: two tall lights split by mullions and a transom
+    const x0 = s * 0.14, x1 = s * 0.86, y0 = s * 0.1, y1 = s * 0.9, bar = s * 0.035;
+    c.filter = 'blur(3px)';
+    c.fillStyle = '#ffffff'; c.fillRect(x0, y0, x1 - x0, y1 - y0);
+    c.fillStyle = '#000';
+    c.fillRect((x0 + x1) / 2 - bar / 2, y0, bar, y1 - y0);
+    c.fillRect(x0, y0 + (y1 - y0) * 0.28, x1 - x0, bar * 0.8);
+    // Branch and leaves, swaying with a slow breeze and the odd gust
+    c.filter = 'blur(5px)';
+    const gust = Math.max(0, Math.sin(t * 0.13)) ** 4 * 1.5;
+    c.strokeStyle = 'rgba(0,0,0,0.85)'; c.lineWidth = 9; c.lineCap = 'round';
+    const sway = Math.sin(t * 0.5) * (2 + gust * 3);
+    c.beginPath(); c.moveTo(-10, 40); c.quadraticCurveTo(120, 90 + sway, 240, 150 + sway * 1.6); c.stroke();
+    c.lineWidth = 6; c.beginPath(); c.moveTo(-10, 120); c.quadraticCurveTo(80, 200 + sway, 190, 320 + sway * 1.4); c.stroke();
+    c.fillStyle = 'rgba(0,0,0,0.88)';
+    for (const l of leaves) {
+      const w = Math.sin(t * 0.9 + l.phase) * l.amp * (1 + gust) + sway;
+      c.beginPath(); c.ellipse(l.x + w, l.y + w * 0.5, l.rx, l.ry, l.rot + w * 0.03, 0, Math.PI * 2); c.fill();
+    }
+    c.filter = 'none';
+    goboTex.needsUpdate = true;
+  }
+  drawGobo(0);
+  const sun = new THREE.SpotLight('#ffc98a', 3.4, 0, 0.24, 0.25, 0);
+  sun.position.set(-17, 9.5, 2);
+  sun.target.position.set(4.6, 0.6, -6);
+  sun.map = goboTex;
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0005;
+  sun.shadow.camera.near = 8; sun.shadow.camera.far = 45;
+  scene.add(sun, sun.target);
+  // The light sits right behind and above the viewer and moves with them, so the shadow always starts
+  // from you and falls straight away into the room. Its height (not a sideways offset) is what makes the
+  // shadow break across the floor, the objects and the wall at their different depths.
+  const LIGHT_Z = 9.5;
+  const spot = new THREE.SpotLight('#ffe4c2', 2.6, 0, 0.66, 0.4, 0);   // wide, even beam: no hotspot glowing around the shadow
+  spot.position.set(0, S.lightY, LIGHT_Z);
+  spot.target.position.set(0, 1.6, BACK_Z);
+  spot.castShadow = true;
+  spot.shadow.mapSize.set(2048, 2048);
+  spot.shadow.bias = -0.0004;
+  spot.shadow.camera.near = 1; spot.shadow.camera.far = 30;
+  scene.add(spot, spot.target);
+
+  // ---------- Person mask -> invisible cut-out standing in the room ----------
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = SEG_W; maskCanvas.height = SEG_H;
+  const maskCtx = maskCanvas.getContext('2d');
+  const maskImg = maskCtx.createImageData(SEG_W, SEG_H);
+  const maskSmooth = new Float32Array(SEG_W * SEG_H);
+
+  // The mask is upscaled with a little blur so the alpha-tested outline is smooth, not pixel steps
+  // Extra headroom above the camera frame, where a head cut off by the frame top gets a rounded cap
+  // The cut-out texture spans floor to just above the camera frame; where the frame sits inside it
+  // (rows, set by placePerson) depends on Shadow size and light height.
+  const HEAD_ROOM = 0.35;
+  // SIDE_ROOM: extra cut-out width on each side of the frame (as a fraction of the frame width), so a body
+  // running into the frame's left/right edge carries on past it instead of ending in a straight cut.
+  const SIDE_ROOM = 1.2;
+  const OCC_W = 1536, OCC_H = 640;   // the frame itself still gets ~450 columns, close to the mask's 512
+  const occLayout = {
+    top: 160, bottom: 600,                                         // canvas rows of the frame's top and bottom edges
+    left: Math.round(OCC_W * SIDE_ROOM / (1 + 2 * SIDE_ROOM)),     // canvas columns of its left and right edges
+    right: Math.round(OCC_W * (1 + SIDE_ROOM) / (1 + 2 * SIDE_ROOM))
+  };
+  const occ = document.createElement('canvas');
+  occ.width = OCC_W; occ.height = OCC_H;
+  const octx = occ.getContext('2d');
+  const occTex = new THREE.CanvasTexture(occ);
+  const PERSON_Z = 5.5;                           // the cut-out stands just in front of the viewer
+  const WALL_Z = BACK_Z;
+  const person = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    // Invisible to the viewer (no colour or depth writes); the shadow pass copies map + alphaTest
+    // from this material, so the silhouette cut-out is what the light sees.
+    new THREE.MeshBasicMaterial({
+      map: occTex, alphaTest: 0.5, colorWrite: false, depthWrite: false,
+      side: THREE.DoubleSide, shadowSide: THREE.DoubleSide
+    })
+  );
+  person.castShadow = true;
+  person.position.z = PERSON_Z;
+  scene.add(person);
+
+  $('preview').width = SEG_W; $('preview').height = SEG_H;
+  const previewCtx = $('preview').getContext('2d');
+
+  // Writes a confidence buffer (0..1) into the mask canvas as dark alpha, smoothed over time.
+  // Returns coverage (fraction of person pixels) and centroid x (0..1).
+  // The segmenter is unsure around frame edges and background clutter, so only confident pixels
+  // count, and only body-sized connected blobs are kept (everyone in view); small stray patches are dropped.
+  // An arm reaching in from the frame edge is often its own blob (not joined to the torso in the image),
+  // so blobs touching the edge only need to be small-hand sized; floating blobs must be clearly bigger.
+  const N = SEG_W * SEG_H, CONF_LO = 0.5, CONF_HI = 0.8;
+  const MIN_EDGE_BLOB = 0.003, MIN_BLOB = 0.012, MIN_OF_LARGEST = 0.06;
+  let keepIds = new Uint8Array(1024);
+  const blobId = new Int32Array(N), stack = new Int32Array(N);
+  // Only the main body (largest blob) carries on past the frame edges; anything else touching an edge
+  // (a shelf, a door frame, a chair) stays inside the picture instead of being stretched into a band.
+  // Edge strip: column 0 = left edge, column 1 = right edge, last row (from column 2) = bottom edge.
+  let mainBlob = 0;
+  const EDGE_COL_L = 2, EDGE_COL_R = SEG_W - 3, EDGE_ROW_B = SEG_H - 3;
+  const edgeCanvas = document.createElement('canvas');
+  edgeCanvas.width = SEG_W + 2; edgeCanvas.height = SEG_H + 1;
+  const edgeCtx = edgeCanvas.getContext('2d');
+  const edgeImg = edgeCtx.createImageData(SEG_W + 2, SEG_H + 1);
+  function writeEdges() {
+    const d = maskImg.data, e = edgeImg.data, ew = SEG_W + 2;
+    const put = (ex, ey, i) => {
+      const o = (ey * ew + ex) * 4, keep = mainBlob && blobId[i] === mainBlob;
+      e[o] = 4; e[o + 1] = 14; e[o + 2] = 18; e[o + 3] = keep ? d[i * 4 + 3] : 0;
+    };
+    for (let y = 0; y < SEG_H; y++) { put(0, y, y * SEG_W + EDGE_COL_L); put(1, y, y * SEG_W + EDGE_COL_R); }
+    for (let x = 0; x < SEG_W; x++) put(2 + x, SEG_H, EDGE_ROW_B * SEG_W + x);
+    edgeCtx.putImageData(edgeImg, 0, 0);
+  }
+
+  function personBlobs() {
+    blobId.fill(0);
+    const sizes = [0], edge = [0];
+    let next = 0, bestSize = 0;
+    mainBlob = 0;
+    for (let s = 0; s < N; s++) {
+      if (blobId[s] || maskSmooth[s] < CONF_LO) continue;
+      const id = ++next; let size = 0, top = 0, touches = 0;
+      blobId[s] = id; stack[top++] = s;
+      while (top) {
+        const i = stack[--top], x = i % SEG_W; size++;
+        if (x === 0 || x === SEG_W - 1 || i < SEG_W || i >= N - SEG_W) touches = 1;
+        for (let k = 0; k < 4; k++) {
+          const n = k === 0 ? (x > 0 ? i - 1 : -1) : k === 1 ? (x < SEG_W - 1 ? i + 1 : -1) : k === 2 ? i - SEG_W : i + SEG_W;
+          if (n < 0 || n >= N || blobId[n] || maskSmooth[n] < CONF_LO) continue;
+          blobId[n] = id; stack[top++] = n;
+        }
+      }
+      sizes.push(size); edge.push(touches);
+      if (size > bestSize) { bestSize = size; mainBlob = id; }
+    }
+    if (keepIds.length <= next) keepIds = new Uint8Array(next * 2);
+    keepIds.fill(0, 0, next + 1);
+    const minFloating = Math.max(N * MIN_BLOB, bestSize * MIN_OF_LARGEST), minEdge = N * MIN_EDGE_BLOB;
+    for (let id = 1; id <= next; id++) keepIds[id] = sizes[id] >= (edge[id] ? minEdge : minFloating) ? 1 : 0;
+  }
+
+  function writeMask(conf) {
+    const d = maskImg.data;
+    let count = 0, sumX = 0, diff = 0;
+    for (let i = 0; i < N; i++) { diff += Math.abs(conf[i] - maskSmooth[i]); maskSmooth[i] = maskSmooth[i] * 0.35 + conf[i] * 0.65; }
+    personBlobs();
+    for (let i = 0; i < N; i++) {
+      let v = 0;
+      if (keepIds[blobId[i]]) {
+        const t = Math.min(1, Math.max(0, (maskSmooth[i] - CONF_LO) / (CONF_HI - CONF_LO)));
+        v = t * t * (3 - 2 * t);
+      }
+      const j = i * 4;
+      d[j] = 4; d[j + 1] = 14; d[j + 2] = 18; d[j + 3] = v * 255;
+      if (v > 0.5) { count++; sumX += i % SEG_W; }
+    }
+    maskCtx.putImageData(maskImg, 0, 0);
+    writeEdges();
+    return { coverage: count / conf.length, cx: count ? sumX / count / SEG_W : 0.5, motion: diff / N };
+  }
+
+  function drawOccluder(presence) {
+    octx.clearRect(0, 0, OCC_W, OCC_H);
+    if (presence > 0.002) {
+      octx.filter = 'blur(2px)';
+      // Fading presence thins the alpha below the cut-out threshold, so the shadow melts away
+      octx.globalAlpha = Math.min(1, presence * 1.15);
+      const { top, bottom, left, right } = occLayout, fw = right - left, fh = bottom - top;
+      octx.drawImage(maskCanvas, left, top, fw, fh);
+      // Past the frame's edges the body carries on: down to the floor below it (cut off by the desk), and
+      // outward at the sides (a shoulder or arm leaving the picture), corners included
+      // (main body only: see writeEdges)
+      const E = edgeCanvas, below = OCC_H - bottom + 1;
+      octx.drawImage(E, 0, 0, 1, SEG_H, 0, top, left + 1, fh);
+      octx.drawImage(E, 1, 0, 1, SEG_H, right - 1, top, OCC_W - right + 1, fh);
+      if (bottom < OCC_H) {
+        octx.drawImage(E, 2, SEG_H, SEG_W, 1, left, bottom - 1, fw, below);
+        octx.drawImage(E, 0, EDGE_ROW_B, 1, 1, 0, bottom - 1, left + 1, below);
+        octx.drawImage(E, 1, EDGE_ROW_B, 1, 1, right - 1, bottom - 1, OCC_W - right + 1, below);
+      }
+      capCutOffTop();
+      octx.filter = 'none'; octx.globalAlpha = 1;
+    }
+    occTex.needsUpdate = true;
+  }
+
+  // Where the body runs into the top of the camera frame (usually the head, when you sit close), close
+  // each run with a dome so the shadow ends in a curve instead of a flat cut. The dome continues the
+  // outline's own curvature: fit a circle to the run's width at the cut and a little below it.
+  const CAP_ROW = 2, CAP_PROBE = Math.round(SEG_H * 0.05);
+  const isOn = (x, y) => maskImg.data[(y * SEG_W + x) * 4 + 3] > 128;
+  function halfWidthAt(cx, y) {
+    if (!isOn(cx, y)) return 0;
+    let l = cx, r = cx;
+    while (l > 0 && isOn(l - 1, y)) l--;
+    while (r < SEG_W - 1 && isOn(r + 1, y)) r++;
+    return (r - l + 1) / 2;
+  }
+  function capHeight(a0, a1, dy) {
+    if (a1 <= a0 + 0.5) return a0;                         // not narrowing: treat the cut as mid-head
+    const y0 = (a1 * a1 - a0 * a0 + dy * dy) / (2 * dy);   // cut height above the fitted circle's centre
+    return y0 <= 0 ? a0 : Math.sqrt(a0 * a0 + y0 * y0) - y0;
+  }
+  function capCutOffTop() {
+    const top = occLayout.top, left = occLayout.left;
+    const sx = (occLayout.right - left) / SEG_W, sy = (occLayout.bottom - top) / SEG_H;
+    octx.fillStyle = 'rgb(4,14,18)';
+    let x0 = -1;
+    for (let x = 0; x <= SEG_W; x++) {
+      const on = x < SEG_W && isOn(x, CAP_ROW);
+      if (on && x0 < 0) x0 = x;
+      if (!on && x0 >= 0) {
+        if (x - x0 >= 4) {
+          const a0 = (x - x0) / 2, mid = Math.round(x0 + a0);
+          const a1 = halfWidthAt(Math.min(SEG_W - 1, mid), CAP_ROW + CAP_PROBE);
+          const rx = a0 * sx, cx = left + x0 * sx + rx;
+          const ry = Math.min(capHeight(a0, a1, CAP_PROBE) * sy, top - 2);
+          octx.fillRect(left + x0 * sx, top - 1, (x - x0) * sx, 4);   // seal the seam with the frame
+          octx.beginPath(); octx.ellipse(cx, top, rx, ry, 0, Math.PI, Math.PI * 2); octx.fill();
+        }
+        x0 = -1;
+      }
+    }
+  }
+
+  // Places the cut-out (standing on the floor) so the top edge of the camera frame always lands where the
+  // back wall meets the ceiling, from the light's point of view. Shadow size scales the frame down from that
+  // edge, so neither frame edge can end up in the middle of the wall; below the frame the body continues.
+  // WALL_TOP follows the room height (room.H), which changes with the display's aspect ratio
+  function placePerson() {
+    const k = (LIGHT_Z - PERSON_Z) / (LIGHT_Z - WALL_Z);   // cut-out size relative to its shadow on the wall
+    const L = spot.position.y;
+    const yTop = L + (room.H - L) * k;                 // frame top edge on the cut-out
+    const h = yTop * S.size, w = h * SEG_W / SEG_H;      // size 1: the frame reaches exactly to the floor
+    const total = yTop + h * HEAD_ROOM;                  // floor up to the headroom above the frame
+    const totalW = w * (1 + 2 * SIDE_ROOM);              // frame plus the side room
+    person.scale.set(S.mirror ? -totalW : totalW, total, 1);   // light from behind shows your back, so mirror by default
+    person.position.x = spot.position.x;                 // straight in front of the light, i.e. of you
+    person.position.y = total / 2;
+    occLayout.top = Math.round((total - yTop) / total * OCC_H);
+    occLayout.bottom = Math.round((total - (yTop - h)) / total * OCC_H);
+  }
+
+  // ---------- Demo figure (fallback when no camera) ----------
+  const demo = { x: -0.2, targetX: 0.5, pointerAt: -1e9, phase: 'walk-in', t0: 0 };
+  addEventListener('pointermove', e => {
+    if (e.target.closest && e.target.closest('.panel')) return;
+    demo.pointerAt = performance.now();
+    demo.targetX = e.clientX / innerWidth;
+  });
+  const demoConf = new Float32Array(SEG_W * SEG_H);
+  const demoCanvas = document.createElement('canvas');
+  demoCanvas.width = SEG_W; demoCanvas.height = SEG_H;
+  const dctx = demoCanvas.getContext('2d', { willReadFrequently: true });
+
+  function demoFrame(now, dt) {
+    const steering = now - demo.pointerAt < 4000;
+    const cycle = (now / 1000) % 22;              // walk in, pause and wave, walk out, empty room
+    let goal, wave = 0;
+    if (steering) goal = demo.targetX;
+    else if (cycle < 5) goal = 0.42;
+    else if (cycle < 11) { goal = 0.42; wave = 1; }
+    else if (cycle < 16) goal = 1.25;
+    else goal = -0.25;
+    if (!steering && cycle >= 16) demo.x = Math.min(demo.x, -0.25 + 0.001); // jump back off-screen left while the room is empty
+    const speed = 0.18;
+    const dx = goal - demo.x;
+    demo.x += Math.sign(dx) * Math.min(Math.abs(dx), speed * dt);
+    const walking = Math.abs(dx) > 0.01;
+
+    const t = now / 1000;
+    const cx = demo.x * SEG_W, ground = SEG_H * 0.98, s = SEG_H / 150;
+    const stride = walking ? Math.sin(t * 7.5) : 0;
+    const bob = walking ? Math.abs(Math.cos(t * 7.5)) * 2 * s : Math.sin(t * 1.6) * 0.6 * s;
+    const hipY = ground - 62 * s - bob, shY = hipY - 46 * s, headY = shY - 17 * s;
+    dctx.clearRect(0, 0, SEG_W, SEG_H);
+    dctx.strokeStyle = dctx.fillStyle = '#fff';
+    dctx.lineCap = 'round'; dctx.lineJoin = 'round';
+    const limb = (x1, y1, x2, y2, w) => { dctx.lineWidth = w * s; dctx.beginPath(); dctx.moveTo(x1, y1); dctx.lineTo(x2, y2); dctx.stroke(); };
+    // legs
+    limb(cx - 4 * s, hipY, cx - 4 * s + stride * 16 * s, ground - 3 * s, 11);
+    limb(cx + 4 * s, hipY, cx + 4 * s - stride * 16 * s, ground - 3 * s, 11);
+    // torso and head
+    limb(cx, hipY - 4 * s, cx, shY + 4 * s, 26);
+    limb(cx, shY - 2 * s, cx, headY + 6 * s, 9);
+    dctx.beginPath(); dctx.ellipse(cx, headY, 9.5 * s, 11 * s, 0, 0, Math.PI * 2); dctx.fill();
+    // arms
+    const armL = walking ? -stride * 0.5 : 0.08;
+    limb(cx - 11 * s, shY + 2 * s, cx - 11 * s + Math.sin(armL) * 40 * s, shY + 2 * s + Math.cos(armL) * 40 * s, 8);
+    if (wave) {
+      const a = -2.5 + Math.sin(t * 6) * 0.35;      // raised forearm swinging
+      const ex = cx + 24 * s, ey = shY - 6 * s;
+      limb(cx + 11 * s, shY + 2 * s, ex, ey, 8);
+      limb(ex, ey, ex + Math.sin(a) * -22 * s, ey + Math.cos(a) * 22 * s, 7);
+    } else {
+      const armR = walking ? stride * 0.5 : -0.08;
+      limb(cx + 11 * s, shY + 2 * s, cx + 11 * s + Math.sin(armR) * 40 * s, shY + 2 * s + Math.cos(armR) * 40 * s, 8);
+    }
+    const px = dctx.getImageData(0, 0, SEG_W, SEG_H).data;
+    for (let i = 0; i < demoConf.length; i++) demoConf[i] = px[i * 4 + 3] / 255;
+    return demoConf;
+  }
+
+  // ---------- Head position from the face detector ----------
+  // One Euro filter: heavy smoothing when the head is nearly still (no jitter), light when it moves (no lag)
+  function oneEuro(minCutoff, beta) {
+    let x = null, dx = 0, last = 0;
+    const alpha = (cut, dt) => 1 / (1 + 1 / (2 * Math.PI * cut * dt));
+    return (v, t) => {
+      if (x === null) { x = v; last = t; return v; }
+      const dt = Math.max(1e-3, (t - last) / 1000); last = t;
+      const d = (v - x) / dt;
+      dx += alpha(1, dt) * (d - dx);
+      x += alpha(minCutoff + beta * Math.abs(dx), dt) * (v - x);
+      return x;
+    };
+  }
+  const headFilter = { x: oneEuro(1.0, 3), y: oneEuro(1.0, 3), z: oneEuro(0.25, 0.4) };   // distance is the noisiest estimate: smooth it hardest
+  const CAM_HFOV = 60 * Math.PI / 180;   // typical laptop webcam
+  const IPD = 0.063, FACE_W = 0.15;      // average eye spacing and face width, metres
+  const CAM_ABOVE_SCREEN = 0.11;         // webcam sits above the screen centre
+
+  // ---------- Camera + MediaPipe person segmentation and face tracking ----------
+  // face: smoothed head position (x, y as 0..1 of the camera frame) and size (face width / frame width)
+  const cam = { segmenter: null, faces: null, ready: false, conf: new Float32Array(SEG_W * SEG_H), fresh: false, lastTs: -1,
+                face: { hx: 0, hy: 0, hz: 0.6, seenAt: -1e9, base: { x: 0, y: 0, z: 0.6 } }, multiAt: -1e9 };   // multiAt: last time 2+ faces were seen
+  const video = $('video');
+  const grab = document.createElement('canvas');
+  grab.width = SEG_W; grab.height = SEG_H;
+  const gctx = grab.getContext('2d', { willReadFrequently: true });
+
+  async function startCamera() {
+    status('Starting camera…');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, facingMode: 'user' }, audio: false });
+      video.srcObject = stream; await video.play();
+    } catch (err) {
+      setSource('demo');
+      status('<b>Camera not available here.</b> Browsers block the camera inside a hosted preview. Open the local file or run it inside the Portal Agent to use the real camera. Showing the demo figure.');
+      return;
+    }
+    try {
+      status('Camera on. Loading the person segmentation and face tracking models…');
+      const { FilesetResolver, ImageSegmenter } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+      const files = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+      // Multiclass selfie model: background / hair / body skin / face skin / clothes / accessories.
+      // Much cleaner edges (hair, shoulders) than the basic selfie model; the person is 1 - background.
+      cam.segmenter = await ImageSegmenter.createFromOptions(files, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite',
+          delegate: 'GPU'
+        },
+        runningMode: 'VIDEO', outputCategoryMask: false, outputConfidenceMasks: true
+      });
+      cam.ready = true;
+      // Face tracking drives the viewpoint (head-coupled parallax). Optional: the shadow works without it.
+      try {
+        const { FaceDetector } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+        cam.faces = await FaceDetector.createFromOptions(files, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite',
+            delegate: 'GPU'
+          },
+          runningMode: 'VIDEO', minDetectionConfidence: 0.6
+        });
+      } catch (err) { cam.faces = null; }
+      // Open-palm gesture opens the camera preview in the portal arch. Optional as well.
+      try {
+        const { GestureRecognizer } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+        cam.gestures = await GestureRecognizer.createFromOptions(files, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/latest/gesture_recognizer.task',
+            delegate: 'GPU'
+          },
+          runningMode: 'VIDEO', numHands: 2
+        });
+      } catch (err) { cam.gestures = null; }
+      status('<b>Camera on.</b> Walk in front of the camera and your shadow lands in the room. Everything runs on this machine; no frames leave it.');
+    } catch (err) {
+      setSource('demo');
+      status('<b>Could not load the segmentation model.</b> It needs an internet connection the first time. Showing the demo figure.');
+    }
+  }
+
+  function cameraFrame(now) {
+    if (!cam.ready || video.readyState < 2) return null;
+    if (now <= cam.lastTs) return cam.fresh ? cam.conf : null;
+    cam.lastTs = now;
+    gctx.drawImage(video, 0, 0, SEG_W, SEG_H);
+    cam.segmenter.segmentForVideo(grab, now, result => {
+      const bg = result.confidenceMasks && result.confidenceMasks[0];
+      if (bg) {
+        const a = bg.getAsFloat32Array();
+        for (let i = 0; i < a.length; i++) cam.conf[i] = 1 - a[i];
+        cam.fresh = true;
+      }
+    });
+    // Gestures every other frame: a held palm doesn't need full frame rate
+    if (cam.gestures && (cam.gFrame = ((cam.gFrame || 0) + 1) % 2) === 0) {
+      const g = cam.gestures.recognizeForVideo(video, now);
+      (g.gestures || []).forEach(cats => {
+        const c = cats && cats[0];
+        if (c && c.categoryName === 'Open_Palm' && c.score > 0.6) feed.palmAt = now;
+      });
+    }
+    if (cam.faces) {
+      const det = cam.faces.detectForVideo(video, now).detections;
+      if (det.length > 1) cam.multiAt = now;                // several people: the view stops following anyone
+      else if (det.length === 1) {
+        // Head position in metres relative to the screen centre, from the eyes (position) and the average
+        // of eye spacing and face width (distance; face width keeps it steady when you turn your head)
+        const dt = det[0], b = dt.boundingBox, kp = dt.keypoints || [];
+        const vw = video.videoWidth || 640, vh = video.videoHeight || 360, f = cam.face;
+        const fpx = (vw / 2) / Math.tan(CAM_HFOV / 2);
+        let ex = b.originX + b.width / 2, ey = b.originY + b.height * 0.4, z = fpx * FACE_W / b.width;
+        if (kp.length >= 2) {
+          ex = (kp[0].x + kp[1].x) / 2 * vw; ey = (kp[0].y + kp[1].y) / 2 * vh;
+          const ipd = Math.hypot((kp[0].x - kp[1].x) * vw, (kp[0].y - kp[1].y) * vh);
+          if (ipd > 4) z = (z + fpx * IPD / ipd) / 2;
+        }
+        // The webcam image isn't mirrored: moving to your right moves you left in the image
+        f.hx = headFilter.x(-(ex - vw / 2) * z / fpx, now);
+        f.hy = headFilter.y((vh / 2 - ey) * z / fpx + CAM_ABOVE_SCREEN, now);
+        f.hz = headFilter.z(z, now);
+        // Neutral pose: where your head usually sits shows exactly the View tilt reference. Captured when
+        // tracking (re)starts, then follows posture changes slowly (~30 s) so only movement shifts the view.
+        const B = f.base, gap = now - f.seenAt;
+        if (gap > 1500) { B.x = f.hx; B.y = f.hy; B.z = f.hz; }
+        else { const a = Math.min(1, gap / 30000); B.x += (f.hx - B.x) * a; B.y += (f.hy - B.y) * a; B.z += (f.hz - B.z) * a; }
+        f.seenAt = now;
+      }
+    }
+    return cam.fresh ? cam.conf : null;
+  }
+
+  function setSource(src) {
+    S.source = src;
+    $('srcCamera').setAttribute('aria-pressed', String(src === 'camera'));
+    $('srcDemo').setAttribute('aria-pressed', String(src === 'demo'));
+  }
+  $('srcCamera').addEventListener('click', () => {
+    setSource('camera');
+    if (!cam.ready) startCamera(); else status('<b>Camera on.</b>');
+  });
+  $('srcDemo').addEventListener('click', () => { setSource('demo'); status('Demo figure running. Move the pointer to steer it.'); });
+
+  // ---------- Camera preview in the portal arch ----------
+  // Hold up an open palm (~1 s) and the arch's opening shows you: first your silhouette, then the full
+  // frame, cropped to the LED wall's ratio and mirrored. A second palm closes it; so do walking away and
+  // 15 s without movement. The edge of the opening fills with light while the palm is held.
+  const FEED_W = 640, FEED_H = Math.round(FEED_W / LED_ASPECT);
+  const feedCanvas = document.createElement('canvas'); feedCanvas.width = FEED_W; feedCanvas.height = FEED_H;
+  const fctx = feedCanvas.getContext('2d');
+  const alphaCanvas = document.createElement('canvas'); alphaCanvas.width = FEED_W; alphaCanvas.height = FEED_H;
+  const actx = alphaCanvas.getContext('2d');
+  const feedTex = new THREE.CanvasTexture(feedCanvas);
+  feedTex.colorSpace = THREE.SRGBColorSpace;
+  const feedScreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(OPEN_W, OPEN_H),
+    new THREE.MeshBasicMaterial({ map: feedTex, transparent: true, toneMapped: false, depthWrite: false })
+  );
+  feedScreen.position.set(archX, OPEN_Y + OPEN_H / 2, archZ);
+  feedScreen.visible = false;
+  props.add(feedScreen);   // moves and scales with the portal frame
+
+  const feed = { open: false, manual: false, reveal: 0, full: 0, hold: 0, latch: false, palmAt: -1e9, stillSince: 0 };
+  const HOLD_S = 0.9, STILL_CLOSE_MS = 15000;
+  const feedLabel = $('feedLabel'), previewBtn = $('previewBtn');
+  const setFeed = (open, manual, now) => { feed.open = open; feed.manual = open && manual; feed.stillSince = now; };
+  previewBtn.addEventListener('click', () => {
+    if (!(S.source === 'camera' && cam.ready)) { status('<b>Camera preview needs the camera.</b> Switch the source to Camera first.'); return; }
+    setFeed(!feed.open, true, performance.now());
+  });
+
+  function updateFeed(now, dt, motion, live) {
+    const palm = live && now - feed.palmAt < 350;
+    if (!palm) { feed.latch = false; feed.hold = Math.max(0, feed.hold - dt * 3); }
+    else if (!feed.latch) {
+      feed.hold = Math.min(1, feed.hold + dt / HOLD_S);
+      if (feed.hold >= 1) { setFeed(!feed.open, false, now); feed.latch = true; feed.hold = 0; }   // lower the hand before it can toggle again
+    }
+    if (motion > 0.003 || palm) feed.stillSince = now;
+    if (feed.open && (!live || now - feed.stillSince > STILL_CLOSE_MS || (!feed.manual && presence < 0.3))) setFeed(false, false, now);
+    // Opening: silhouette first, then the full frame. Closing: the frame shrinks back into the silhouette.
+    feed.reveal = feed.open || feed.full > 0.15 ? Math.min(1, feed.reveal + dt / 0.5) : Math.max(0, feed.reveal - dt / 0.5);
+    feed.full = feed.open && feed.reveal > 0.8 ? Math.min(1, feed.full + dt / 0.9) : Math.max(0, feed.full - dt / 0.6);
+    const label = feed.open ? 'Hide camera preview' : 'Show camera preview';
+    if (previewBtn.textContent !== label) previewBtn.textContent = label;
+  }
+
+  const ease = t => t * t * (3 - 2 * t);
+  const projV = new THREE.Vector3();
+  function drawFeed(source) {
+    const visible = feed.reveal > 0.001 || feed.hold > 0.001;
+    feedScreen.visible = visible;
+    feedLabel.style.opacity = String(ease(feed.full));
+    if (!visible) return;
+    fctx.clearRect(0, 0, FEED_W, FEED_H);
+    if (feed.reveal > 0.001 && source) {
+      const sw = source.videoWidth || source.width, sh = source.videoHeight || source.height;
+      // Crop the camera frame to the LED ratio (centre cut), then mirror it like a mirror would
+      const cw = Math.min(sw, sh * LED_ASPECT), ch = cw / LED_ASPECT;
+      const mw = Math.min(SEG_W, SEG_H * LED_ASPECT), mh = mw / LED_ASPECT;
+      // Alpha: the silhouette, widening to the whole opening as `full` rises
+      actx.globalCompositeOperation = 'copy';
+      actx.fillStyle = `rgba(0,0,0,${ease(feed.full)})`; actx.fillRect(0, 0, FEED_W, FEED_H);
+      actx.globalCompositeOperation = 'source-over';
+      actx.filter = 'blur(3px)';
+      actx.save(); actx.translate(FEED_W, 0); actx.scale(-1, 1);   // mirrored, to line up with the mirrored image
+      actx.drawImage(maskCanvas, (SEG_W - mw) / 2, (SEG_H - mh) / 2, mw, mh, 0, 0, FEED_W, FEED_H);
+      actx.restore();
+      actx.filter = 'none';
+      fctx.save();
+      fctx.globalAlpha = ease(feed.reveal);
+      fctx.translate(FEED_W, 0); fctx.scale(-1, 1);
+      fctx.drawImage(source, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, FEED_W, FEED_H);
+      fctx.restore();
+      fctx.globalCompositeOperation = 'destination-in';
+      fctx.drawImage(alphaCanvas, 0, 0);
+      fctx.globalCompositeOperation = 'source-over';
+    }
+    if (feed.hold > 0.001) {
+      // Light runs clockwise round the opening from the top centre while the palm is held
+      const i = 4, w = FEED_W, h = FEED_H, per = 2 * (w + h - 4 * i);
+      fctx.save();
+      fctx.strokeStyle = '#3FBCCE'; fctx.lineWidth = 6; fctx.lineJoin = 'round';
+      fctx.shadowColor = 'rgba(63,188,206,0.8)'; fctx.shadowBlur = 14;
+      fctx.setLineDash([per * feed.hold, per]);
+      fctx.beginPath(); fctx.moveTo(w / 2, i); fctx.lineTo(w - i, i); fctx.lineTo(w - i, h - i); fctx.lineTo(i, h - i); fctx.lineTo(i, i); fctx.closePath();
+      fctx.stroke();
+      fctx.restore();
+    }
+    feedTex.needsUpdate = true;
+    // Privacy label just under the opening
+    projV.set(0, -OPEN_H / 2 - 0.02, FRAME_D / 2); feedScreen.localToWorld(projV).project(camera);
+    feedLabel.style.left = ((projV.x + 1) / 2 * innerWidth) + 'px';
+    feedLabel.style.top = Math.min(innerHeight - 40, (1 - projV.y) / 2 * innerHeight + 10) + 'px';
+  }
+
+  // ---------- Dust in the beam ----------
+  const DUST = 420;
+  const dustGeo = new THREE.BufferGeometry();
+  const dustPos = new Float32Array(DUST * 3), dustSeed = new Float32Array(DUST);
+  for (let i = 0; i < DUST; i++) {
+    dustPos[i * 3] = (Math.random() - 0.5) * 6;
+    dustPos[i * 3 + 1] = Math.random() * 4;
+    dustPos[i * 3 + 2] = -2 + Math.random() * 9;
+    dustSeed[i] = Math.random() * 100;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+  const dot = document.createElement('canvas'); dot.width = dot.height = 32;
+  const dotCtx = dot.getContext('2d');
+  const grad = dotCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, 'rgba(255,245,230,1)'); grad.addColorStop(1, 'rgba(255,245,230,0)');
+  dotCtx.fillStyle = grad; dotCtx.fillRect(0, 0, 32, 32);
+  const dustMat = new THREE.PointsMaterial({ size: 0.035, map: new THREE.CanvasTexture(dot), transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending });
+  const dust = new THREE.Points(dustGeo, dustMat);
+  scene.add(dust);
+
+  // ---------- Loop ----------
+  // #test keeps the loop running in a background tab (rAF pauses there); otherwise use rAF
+  const frame = location.hash === '#test' ? f => setTimeout(() => f(performance.now()), 33) : f => requestAnimationFrame(f);
+  let presence = 0, centroid = 0.5, last = performance.now(), tickCount = 0;
+  const hint = $('hint');
+
+  function resize() {
+    const w = innerWidth, h = innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    // The back wall takes the display's aspect ratio. Its area stays about the same as the original
+    // 14 x 6 m wall, so a wide display gets a long low room and a portrait one a tall narrow room.
+    const AREA = 84, H = Math.min(12, Math.max(4.5, Math.sqrt(AREA / camera.aspect)));
+    layoutRoom(H * camera.aspect, H);
+    // Window size: the back wall fills the same share of the screen (~53%) in both directions on any display
+    const WALL_SHARE = 0.53;
+    win.h = H * (camBase.z - WIN_Z) / (camBase.z - BACK_Z) / WALL_SHARE; win.w = win.h * camera.aspect;
+    applyWindowProjection();
+  }
+  addEventListener('resize', resize); resize();
+
+  if (location.hash === '#test') window.__sw = { S, person, spot, demo, cam, feed, renderer, scene, camera, writeMask, maskImg, get presence() { return presence; } };
+  function tick(now) {
+    const dt = Math.min((now - last) / 1000, 0.1); last = now;
+
+    const conf = (location.hash === '#test' && window.__fakeConf) || (S.source === 'camera' ? cameraFrame(now) : demoFrame(now, dt));
+    let coverage = 0, motion = 0;
+    if (conf) { const r = writeMask(conf); coverage = r.coverage; motion = r.motion; if (coverage > 0.01) centroid += (r.cx - centroid) * Math.min(1, dt * 2); }
+    const present = coverage > 0.012;
+    presence += ((present ? 1 : 0) - presence) * Math.min(1, dt * (present ? 2.2 : 0.9));
+    drawOccluder(presence);
+    spot.shadow.radius = 1 + S.soft * 0.3;      // PCF steps show past ~radius 8
+
+    previewCtx.fillStyle = '#000'; previewCtx.fillRect(0, 0, SEG_W, SEG_H);
+    if (!panel.hidden) {
+      previewCtx.save();
+      if (S.source === 'camera' && cam.ready) { previewCtx.globalAlpha = 0.5; previewCtx.drawImage(video, 0, 0, SEG_W, SEG_H); previewCtx.globalAlpha = 1; }
+      previewCtx.globalCompositeOperation = 'lighter';
+      previewCtx.filter = 'invert(1)';
+      previewCtx.drawImage(maskCanvas, 0, 0);
+      previewCtx.restore();
+    }
+
+    const testHook = location.hash === '#test';
+    const liveCam = (S.source === 'camera' && cam.ready) || (testHook && !!window.__fakeVideo);
+    updateFeed(now, dt, motion, liveCam);
+    drawFeed(testHook && window.__fakeVideo ? window.__fakeVideo : video);
+
+    // Hint: invite people in when the room is empty; once someone is there and the gesture works, tell them about it
+    const gestureReady = liveCam && (cam.gestures || testHook);
+    const hintText = presence > 0.5 && gestureReady ? 'Raise an open hand to see yourself in the portal' : 'Step in front of the portal';
+    if (hint.textContent !== hintText) hint.textContent = hintText;
+    hint.style.opacity = String(feed.reveal > 0.01 ? 0 : presence > 0.5 && gestureReady ? 0.75 : Math.max(0, 1 - presence * 1.6) * 0.9);
+
+    // Light and gentle room parallax toward where the person stands
+    spot.position.y += (S.lightY - spot.position.y) * Math.min(1, dt * 3);
+    placePerson();
+    const drift = reduceMotion ? 0 : Math.sin(now / 9000) * 0.12;
+    const sway = reduceMotion ? 0 : Math.sin(now / 11000) * 0.05;
+    let tx, ty = camBase.y + sway, tz = camBase.z, ease = 1.2;
+    const f = cam.face, live = S.source === 'camera' && cam.ready;
+    // Head-coupled view only while exactly one face is in view (held for a second after a second face
+    // disappears, so a flickering detection can't make the room jump). Otherwise drift slowly to centre.
+    const single = live && now - f.seenAt < 600 && now - cam.multiAt > 1000;
+    if (live && !(S.parallax && single)) {
+      tx = 0; ty = camBase.y; tz = camBase.z; ease = 0.5;
+    } else if (S.parallax && single) {
+      // Head movement away from your neutral pose (metres) mapped 1:1 into the room's scale; at the neutral
+      // pose the view rests exactly at the View tilt reference. The head data is already filtered.
+      const B = f.base;
+      tx = (f.hx - B.x) * UNITS_PER_M;
+      ty = camBase.y + (f.hy - B.y) * UNITS_PER_M;
+      // Leaning in/out changes the window's field of view, which reads as the room resizing at full
+      // strength; Depth effect scales it down (default 30%)
+      tz = camBase.z + Math.max(-0.3, Math.min(0.6, f.hz - B.z)) * UNITS_PER_M * S.depth;
+      ease = 12;
+    } else {
+      const off = S.parallax ? (centroid - 0.5) * (S.mirror ? -1 : 1) * presence : 0;
+      tx = off * 1.4 + drift;
+    }
+    const e = Math.min(1, dt * ease);
+    camera.position.x += (tx - camera.position.x) * e;
+    camera.position.y += (ty - camera.position.y) * e;
+    camera.position.z += (tz - camera.position.z) * e;
+    applyWindowProjection();                             // camera keeps facing straight into the room
+
+    dust.visible = S.dust;
+    if (S.dust && !reduceMotion) {
+      const t = now / 1000;
+      for (let i = 0; i < DUST; i++) {
+        const sd = dustSeed[i];
+        dustPos[i * 3] += Math.sin(t * 0.3 + sd) * 0.0009;
+        dustPos[i * 3 + 1] += 0.0012 + Math.cos(t * 0.2 + sd) * 0.0008;
+        if (dustPos[i * 3 + 1] > 4) dustPos[i * 3 + 1] = 0;
+      }
+      dustGeo.attributes.position.needsUpdate = true;
+    }
+
+    // Breeze: the leaf shadows and the plant move together
+    if (!reduceMotion) {
+      const t = now / 1000;
+      if ((tickCount = (tickCount + 1) % 2) === 0) drawGobo(t);
+      for (const stem of plant.children) if (stem.userData.phase !== undefined) stem.rotation.z = Math.sin(t * 0.8 + stem.userData.phase) * 0.035;
+    }
+
+    renderer.render(scene, camera);
+    frame(tick);
+  }
+  frame(tick);
+
+  // ---------- Clock ----------
+  function clock() {
+    const d = new Date();
+    $('time').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+  clock(); setInterval(clock, 10000);
+
+  // Fade the settings button when the pointer is still, like a real idle screen
+  let idleTimer;
+  const wake = () => { settingsBtn.style.opacity = '1'; clearTimeout(idleTimer); idleTimer = setTimeout(() => { if (panel.hidden) settingsBtn.style.opacity = '0'; }, 3500); };
+  addEventListener('pointermove', wake); wake();
+
+  // Camera first if the URL ends in #camera (handy for the Portal Agent window)
+  if (location.hash === '#camera') { setSource('camera'); startCamera(); }
+})();
+</script>
+
+</body>
+</html>
