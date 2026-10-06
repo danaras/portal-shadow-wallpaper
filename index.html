@@ -72,6 +72,11 @@
   }
   .panel-btn { font: 500 13px var(--sans); color: var(--off-white); background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 10px; padding: 9px 0; cursor: pointer; }
   .panel-btn:hover { border-color: var(--light-blue); }
+  .room-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+  .room-row .panel-btn { padding: 9px 14px; }
+  .room-row input { font: 500 13px var(--mono); color: var(--off-white); background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+  .room-row input:focus-visible { outline: 2px solid var(--light-blue); outline-offset: 2px; }
+  .panel { max-height: calc(100vh - 80px); overflow-y: auto; }
   .panel-btn:focus-visible { outline: 2px solid var(--light-blue); outline-offset: 2px; }
 
   /* Fine film grain over the render, so flat gradients read as light rather than as a 3D test scene */
@@ -125,6 +130,13 @@
   <label class="check"><input type="checkbox" id="parallax" checked> Room follows the person</label>
   <label class="check"><input type="checkbox" id="dust" checked> Dust in the light</label>
   <div class="status" id="status">Demo figure running. Move the pointer to steer it.</div>
+  <h2>Shared room</h2>
+  <div class="room-row">
+    <input id="roomName" type="text" placeholder="e.g. sf-london" maxlength="40" autocomplete="off" spellcheck="false" aria-label="Room name">
+    <button class="panel-btn" id="roomJoin">Join</button>
+  </div>
+  <button class="panel-btn" id="roomCopy">Copy invite link</button>
+  <div class="status" id="netStatus">Not in a shared room. Everyone who joins the same room name sees each other's shadows.</div>
 </div>
 
 <video id="video" playsinline muted hidden></video>
@@ -980,6 +992,184 @@
   const dust = new THREE.Points(dustGeo, dustMat);
   scene.add(dust);
 
+  // ---------- Shared room: other people's shadows, peer to peer ----------
+  // Everyone who joins the same room name connects browser to browser (WebRTC via Trystero; public Nostr
+  // relays only make the introduction). Only a 160 x 192 one-bit outline of each person is sent, never video.
+  // A second, cooler light shares the warm light's position. Local people and the furniture block both
+  // (real shadow casters); remote people are drawn into the warm light's cookie instead, projected from where
+  // their cut-out would stand, so they only block the warm light and land lighter and blue-tinted.
+  // (Per-light shadow casters aren't possible: three.js filters every shadow pass by the viewer camera's layers.)
+  const REMOTE_SHARE = 0.18;
+  const spotB = new THREE.SpotLight('#cdeef3', spot.intensity * REMOTE_SHARE, 0, spot.angle, spot.penumbra, 0);
+  spot.intensity *= 1 - REMOTE_SHARE;
+  spotB.castShadow = true;
+  spotB.shadow.mapSize.set(1024, 1024);
+  spotB.shadow.bias = spot.shadow.bias;
+  spotB.shadow.camera.near = 1; spotB.shadow.camera.far = 30;
+  spotB.target = spot.target;
+  scene.add(spotB);
+
+  // The outline is a crop: the camera frame plus a little of the side room. On the receiving side the texture's
+  // edge pixels clamp outward, which continues the body past the crop exactly like the local cut-out does.
+  const NW = 160, NH = 192, PACKED = NW * NH / 8, CROP_SIDE = 0.35;
+  const CROP_FRAC = (1 + 2 * CROP_SIDE) / (1 + 2 * SIDE_ROOM);   // crop width as a share of the cut-out width
+  const small = document.createElement('canvas'); small.width = NW; small.height = NH;
+  const sctx = small.getContext('2d', { willReadFrequently: true });
+  const outbox = new Uint8Array(PACKED);
+  const net = { room: null, action: null, name: '', peers: new Map(), lastSend: 0, sentEmpty: false };
+  const SLOTS = [1, -1, 2, -2, 3, -3];   // remote people stand beside you, alternating right and left
+
+  // Downsample the finished cut-out (frame plus body extensions) and pack it to one bit per pixel
+  function encodeOutline() {
+    sctx.clearRect(0, 0, NW, NH);
+    const fwPx = occLayout.right - occLayout.left, x0 = occLayout.left - fwPx * CROP_SIDE;
+    sctx.drawImage(occ, x0, 0, fwPx * (1 + 2 * CROP_SIDE), OCC_H, 0, 0, NW, NH);
+    const d = sctx.getImageData(0, 0, NW, NH).data;
+    outbox.fill(0);
+    let any = false;
+    for (let i = 0; i < NW * NH; i++) if (d[i * 4 + 3] > 110) { outbox[i >> 3] |= 1 << (i & 7); any = true; }
+    return any;
+  }
+
+  function peerFor(id) {
+    let p = net.peers.get(id);
+    if (p) return p;
+    const c = document.createElement('canvas'); c.width = NW; c.height = NH;
+    const ctx = c.getContext('2d');
+    const used = new Set([...net.peers.values()].map(q => q.slot));
+    const slot = SLOTS.find(s => !used.has(s)) ?? SLOTS[net.peers.size % SLOTS.length];
+    p = { id, c, ctx, img: ctx.createImageData(NW, NH), slot, bits: new Uint8Array(PACKED), lastAt: -1e9, fade: 0, drawnFade: -1 };
+    net.peers.set(id, p);
+    return p;
+  }
+  function removePeer(id) {
+    const p = net.peers.get(id);
+    if (!p) return;
+    net.peers.delete(id);
+  }
+
+  function updateNetStatus() {
+    const n = net.peers.size;
+    $('netStatus').innerHTML = !net.room
+      ? 'Not in a shared room. Everyone who joins the same room name sees each other\'s shadows.'
+      : n ? `<b>Room “${net.name}”:</b> ${n} other ${n === 1 ? 'person' : 'people'} connected. Their shadows show lighter and blue.`
+          : `<b>Room “${net.name}”:</b> waiting for someone else to join. Send them the invite link.`;
+    document.querySelector('.identity .state').textContent = 'Available' + (n ? ` · ${n} other portal${n === 1 ? '' : 's'} here` : '');
+  }
+
+  const cleanRoom = s => (s || '').toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  async function joinShared(name) {
+    name = cleanRoom(name);
+    if (!name) return;
+    if (net.room) { try { net.room.leave(); } catch (e) {} [...net.peers.keys()].forEach(removePeer); net.room = null; }
+    net.name = name;
+    $('roomName').value = name;
+    const q = new URLSearchParams(location.search); q.set('room', name);
+    history.replaceState(null, '', `${location.pathname}?${q}${location.hash}`);
+    $('netStatus').textContent = 'Connecting…';
+    try {
+      const { joinRoom } = await import('https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm');
+      net.room = joinRoom({ appId: 'noro-portal-shadow-wallpaper' }, name);
+      spot.map = cookieTex;   // only in a shared room: the cookie costs a texture lookup
+      net.action = net.room.makeAction('shadow');
+      net.action.onMessage = (data, meta) => {
+        const bytes = new Uint8Array(data);
+        if (bytes.length !== PACKED) return;
+        const p = peerFor(meta.peerId);
+        p.bits.set(bytes); p.lastAt = performance.now(); p.any = bytes.some(b => b); p.drawnFade = -1;
+      };
+      net.room.onPeerJoin = id => { peerFor(id); net.sentEmpty = false; updateNetStatus(); };
+      net.room.onPeerLeave = id => { removePeer(id); updateNetStatus(); };
+      updateNetStatus();
+    } catch (err) {
+      net.room = null;
+      $('netStatus').innerHTML = '<b>Could not join the room.</b> The connection library needs internet access; try again.';
+    }
+  }
+  $('roomJoin').addEventListener('click', () => joinShared($('roomName').value));
+  $('roomName').addEventListener('keydown', e => { if (e.key === 'Enter') joinShared($('roomName').value); });
+  $('roomCopy').addEventListener('click', () => {
+    const name = cleanRoom($('roomName').value) || net.name;
+    if (!name) { $('netStatus').textContent = 'Type a room name first, then copy the link.'; return; }
+    const link = `${location.origin}${location.pathname}?room=${name}#camera`;
+    navigator.clipboard.writeText(link).then(
+      () => { $('netStatus').innerHTML = `<b>Invite link copied.</b> ${link}`; },
+      () => { $('netStatus').innerHTML = `Copy this link: <b>${link}</b>`; });
+  });
+
+  // The warm light's cookie: white, with each remote outline drawn black where its cut-out would project.
+  // The cut-out quad (same size as yours, ~3.5 m beside you on the wall) is projected through the light's
+  // shadow camera; the crop sits in its middle and its edge columns stretch out to the quad's sides.
+  const COOKIE = 512;
+  const cookie = document.createElement('canvas'); cookie.width = cookie.height = COOKIE;
+  const kctx = cookie.getContext('2d');
+  const cookieTex = new THREE.CanvasTexture(cookie); cookieTex.colorSpace = THREE.SRGBColorSpace;
+  const quad = new THREE.Object3D(), qv = new THREE.Vector3();
+  const toCookie = (x, y) => { qv.set(x, y, 0); quad.localToWorld(qv).applyMatrix4(spot.shadow.camera.matrixWorldInverse).applyMatrix4(spot.shadow.camera.projectionMatrix);
+    return [(qv.x * 0.5 + 0.5) * COOKIE, (0.5 - qv.y * 0.5) * COOKIE]; };
+  let cookieDirty = true;
+  function drawCookie(fw) {
+    const visible = [...net.peers.values()].filter(p => p.fade > 0.01);
+    if (!visible.length && !cookieDirty) return;
+    kctx.setTransform(1, 0, 0, 1, 0, 0);
+    kctx.filter = 'none';
+    kctx.fillStyle = '#fff'; kctx.fillRect(0, 0, COOKIE, COOKIE);
+    cookieDirty = visible.length > 0;
+    if (visible.length) {
+      spot.shadow.updateMatrices(spot);
+      kctx.filter = `blur(${1 + S.soft * 0.25}px)`;
+      for (const p of visible) {
+        quad.position.set(person.position.x + p.slot * fw * 0.3, person.position.y, PERSON_Z);   // offsets grow ~4.6x on the way to the wall
+        quad.scale.copy(person.scale);
+        quad.updateMatrixWorld();
+        const [x0, y0] = toCookie(-0.5, 0.5), [x1, y1] = toCookie(0.5, -0.5);
+        // Map the unit quad (u 0..1, v 0..1) onto its projected rectangle; a mirrored quad flips the x scale
+        kctx.setTransform(x1 - x0, 0, 0, y1 - y0, x0, y0);
+        const c0 = (1 - CROP_FRAC) / 2;
+        // tint the outline black: draw it through a temporary composite
+        tint.clearRect(0, 0, NW, NH); tint.globalCompositeOperation = 'source-over'; tint.drawImage(p.c, 0, 0);
+        tint.globalCompositeOperation = 'source-in'; tint.fillStyle = '#000'; tint.fillRect(0, 0, NW, NH);
+        kctx.drawImage(tintC, 0, 0, NW, NH, c0, 0, CROP_FRAC, 1);
+        kctx.drawImage(tintC, 0, 0, 1, NH, 0, 0, c0 + 0.002, 1);                 // body continuing past the crop, left
+        kctx.drawImage(tintC, NW - 1, 0, 1, NH, c0 + CROP_FRAC - 0.002, 0, c0 + 0.002, 1);   // and right
+      }
+      kctx.setTransform(1, 0, 0, 1, 0, 0); kctx.filter = 'none';
+    }
+    cookieTex.needsUpdate = true;
+  }
+  const tintC = document.createElement('canvas'); tintC.width = NW; tintC.height = NH;
+  const tint = tintC.getContext('2d');
+
+  function updateRemotes(now) {
+    spotB.position.copy(spot.position);
+    if (!net.room) return;
+    // Send your outline about 12 times a second while someone is in view, and a blank once a second otherwise
+    if (net.peers.size && now - net.lastSend > 80) {
+      const any = presence > 0.05 && encodeOutline();
+      if (any || now - net.lastSend > 1000 || !net.sentEmpty) {
+        if (!any) outbox.fill(0);
+        try { net.action.send(outbox); } catch (e) {}
+        net.lastSend = now; net.sentEmpty = !any;
+      }
+    }
+    const fw = Math.abs(person.scale.x) / (1 + 2 * SIDE_ROOM);   // width of one camera frame on the cut-out
+    for (const p of net.peers.values()) {
+      const live = p.any && now - p.lastAt < 2500;
+      p.fade += ((live ? 1 : 0) - p.fade) * 0.08;
+      if (Math.abs(p.fade - p.drawnFade) > 0.02) {
+        const d = p.img.data, a = Math.round(255 * Math.min(1, p.fade * 1.15));
+        for (let i = 0; i < NW * NH; i++) d[i * 4 + 3] = (p.bits[i >> 3] >> (i & 7)) & 1 ? a : 0;
+        p.ctx.putImageData(p.img, 0, 0);
+        p.drawnFade = p.fade;
+      }
+    }
+    drawCookie(fw);
+  }
+  {
+    const r = cleanRoom(new URLSearchParams(location.search).get('room'));
+    if (r) joinShared(r);
+  }
+
   // ---------- Loop ----------
   // #test keeps the loop running in a background tab (rAF pauses there); otherwise use rAF
   const frame = location.hash === '#test' ? f => setTimeout(() => f(performance.now()), 33) : f => requestAnimationFrame(f);
@@ -1001,7 +1191,7 @@
   }
   addEventListener('resize', resize); resize();
 
-  if (location.hash === '#test') window.__sw = { S, person, spot, demo, cam, feed, renderer, scene, camera, writeMask, maskImg, get presence() { return presence; } };
+  if (location.hash === '#test') window.__sw = { S, person, spot, demo, cam, feed, net, renderer, scene, camera, writeMask, maskImg, get presence() { return presence; } };
   function tick(now) {
     const dt = Math.min((now - last) / 1000, 0.1); last = now;
 
@@ -1037,6 +1227,7 @@
     // Light and gentle room parallax toward where the person stands
     spot.position.y += (S.lightY - spot.position.y) * Math.min(1, dt * 3);
     placePerson();
+    updateRemotes(now);
     const drift = reduceMotion ? 0 : Math.sin(now / 9000) * 0.12;
     const sway = reduceMotion ? 0 : Math.sin(now / 11000) * 0.05;
     let tx, ty = camBase.y + sway, tz = camBase.z, ease = 1.2;
